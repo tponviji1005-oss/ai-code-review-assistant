@@ -24,7 +24,9 @@ ${rawDiff}
 ## Parsed Changes
 ${filesSummary || '(no structured changes found)'}
 
-For each issue found, provide the file name, exact line number, a category (bug|security|performance|style), severity (critical|high|medium|low), a clear description, and a specific fix suggestion.
+For each issue found, provide the file name, exact line number, a category (bug|security|performance|style), severity (critical|high|medium|low), a confidence score (0-100), a clear description, and a specific fix suggestion.
+
+Assign LOWER confidence (below 50) to minor style preferences or subjective suggestions, and HIGHER confidence (above 80) to clear bugs, security vulnerabilities, or definite logic errors.
 
 Return ONLY valid JSON in this exact shape — no markdown, no code fences, no explanation outside the JSON:
 {
@@ -34,6 +36,7 @@ Return ONLY valid JSON in this exact shape — no markdown, no code fences, no e
       "line": 12,
       "category": "bug|security|performance|style",
       "severity": "critical|high|medium|low",
+      "confidence": 85,
       "description": "what is wrong",
       "suggestion": "how to fix it"
     }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 const CATEGORY_COLORS = {
   bug: 'bg-red-100 text-red-800',
@@ -14,7 +14,21 @@ const SEVERITY_COLORS = {
   low: 'bg-gray-100 text-gray-600',
 };
 
-function IssueCard({ issue, index }) {
+function ConfidenceDot({ confidence }) {
+  const color =
+    confidence >= 80 ? 'bg-green-500' :
+    confidence >= 50 ? 'bg-yellow-500' :
+    'bg-gray-300';
+
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500">
+      <span className={`w-2.5 h-2.5 rounded-full ${color}`} />
+      {confidence}% confidence
+    </span>
+  );
+}
+
+function IssueCard({ issue }) {
   const catColor = CATEGORY_COLORS[issue.category] || 'bg-gray-100 text-gray-800';
   const sevColor = SEVERITY_COLORS[issue.severity] || 'bg-gray-100 text-gray-600';
 
@@ -30,6 +44,7 @@ function IssueCard({ issue, index }) {
         <span className={`text-xs font-semibold px-2 py-0.5 rounded ${sevColor}`}>
           {issue.severity}
         </span>
+        <ConfidenceDot confidence={issue.confidence} />
       </div>
       <p className="text-sm mb-1">{issue.description}</p>
       {issue.suggestion && (
@@ -41,11 +56,52 @@ function IssueCard({ issue, index }) {
   );
 }
 
+function SensitivitySlider({ value, onChange, total, filtered }) {
+  const hidden = total - filtered;
+  const noisePct = total > 0 ? Math.round((hidden / total) * 100) : 0;
+
+  return (
+    <div className="bg-white border rounded-lg p-4 mb-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-gray-500 font-semibold">Chill</span>
+        <span className="text-sm font-medium">Sensitivity: {value}</span>
+        <span className="text-xs text-gray-500 font-semibold">Assertive</span>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full"
+      />
+      <div className="flex justify-between text-xs text-gray-400 mt-1">
+        <span>Show all</span>
+        <span>Show only high-confidence</span>
+      </div>
+      <p className="text-sm text-gray-600 mt-2">
+        Showing <strong>{filtered}</strong> of <strong>{total}</strong> total issues
+        {hidden > 0 && (
+          <span className="text-gray-400">
+            {' — '}Filtered out {hidden} low-confidence suggestions (noise reduction: {noisePct}%)
+          </span>
+        )}
+      </p>
+    </div>
+  );
+}
+
 export default function NewReview() {
   const [diff, setDiff] = useState('');
   const [issues, setIssues] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [sensitivity, setSensitivity] = useState(50);
+
+  const filteredIssues = useMemo(
+    () => issues.filter((issue) => (issue.confidence ?? 0) >= sensitivity),
+    [issues, sensitivity]
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -69,6 +125,7 @@ export default function NewReview() {
       }
 
       setIssues(data.issues || []);
+      setSensitivity(50);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -109,14 +166,25 @@ export default function NewReview() {
 
       {!loading && issues.length > 0 && (
         <div>
+          <SensitivitySlider
+            value={sensitivity}
+            onChange={setSensitivity}
+            total={issues.length}
+            filtered={filteredIssues.length}
+          />
           <h2 className="text-xl font-semibold mb-3">
             Issues Found ({issues.length})
           </h2>
           <div className="space-y-3">
-            {issues.map((issue, i) => (
-              <IssueCard key={i} issue={issue} index={i} />
+            {filteredIssues.map((issue, i) => (
+              <IssueCard key={i} issue={issue} />
             ))}
           </div>
+          {filteredIssues.length === 0 && (
+            <p className="text-gray-500 text-center py-4">
+              All issues filtered out. Lower the sensitivity to see more.
+            </p>
+          )}
         </div>
       )}
 
