@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { supabase } from './supabase.js';
 import reviewRouter from './routes/review.js';
 
 dotenv.config();
@@ -22,7 +23,7 @@ app.listen(PORT, () => {
   } else {
     console.warn('Gemini API key is missing - AI review will not work');
   }
-  if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
     console.log('Supabase credentials are configured');
   } else {
     console.warn('Supabase credentials incomplete');

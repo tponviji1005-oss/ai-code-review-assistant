@@ -5,6 +5,8 @@ import Navbar from './components/Navbar';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import NewReview from './pages/NewReview';
+import Dashboard from './pages/Dashboard';
+import ReviewView from './pages/ReviewView';
 
 function AuthenticatedLayout() {
   return (
@@ -13,6 +15,8 @@ function AuthenticatedLayout() {
       <main>
         <Routes>
           <Route path="/" element={<NewReview />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/review/:id" element={<ReviewView />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

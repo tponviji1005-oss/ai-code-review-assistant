@@ -1,107 +1,26 @@
 import { useState, useMemo } from 'react';
-
-const CATEGORY_COLORS = {
-  bug: 'bg-red-100 text-red-800',
-  security: 'bg-orange-100 text-orange-800',
-  performance: 'bg-yellow-100 text-yellow-800',
-  style: 'bg-blue-100 text-blue-800',
-};
-
-const SEVERITY_COLORS = {
-  critical: 'bg-red-200 text-red-900',
-  high: 'bg-orange-200 text-orange-900',
-  medium: 'bg-yellow-200 text-yellow-900',
-  low: 'bg-gray-100 text-gray-600',
-};
-
-function ConfidenceDot({ confidence }) {
-  const color =
-    confidence >= 80 ? 'bg-green-500' :
-    confidence >= 50 ? 'bg-yellow-500' :
-    'bg-gray-300';
-
-  return (
-    <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500">
-      <span className={`w-2.5 h-2.5 rounded-full ${color}`} />
-      {confidence}% confidence
-    </span>
-  );
-}
-
-function IssueCard({ issue }) {
-  const catColor = CATEGORY_COLORS[issue.category] || 'bg-gray-100 text-gray-800';
-  const sevColor = SEVERITY_COLORS[issue.severity] || 'bg-gray-100 text-gray-600';
-
-  return (
-    <div className="border rounded-lg p-4 bg-white shadow-sm">
-      <div className="flex items-center gap-2 mb-2 flex-wrap">
-        <span className="font-mono text-sm text-gray-500">
-          {issue.file}:{issue.line}
-        </span>
-        <span className={`text-xs font-semibold px-2 py-0.5 rounded ${catColor}`}>
-          {issue.category}
-        </span>
-        <span className={`text-xs font-semibold px-2 py-0.5 rounded ${sevColor}`}>
-          {issue.severity}
-        </span>
-        <ConfidenceDot confidence={issue.confidence} />
-      </div>
-      <p className="text-sm mb-1">{issue.description}</p>
-      {issue.suggestion && (
-        <pre className="bg-gray-50 text-xs p-2 rounded overflow-x-auto whitespace-pre-wrap">
-          {issue.suggestion}
-        </pre>
-      )}
-    </div>
-  );
-}
-
-function SensitivitySlider({ value, onChange, total, filtered }) {
-  const hidden = total - filtered;
-  const noisePct = total > 0 ? Math.round((hidden / total) * 100) : 0;
-
-  return (
-    <div className="bg-white border rounded-lg p-4 mb-4">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs text-gray-500 font-semibold">Chill</span>
-        <span className="text-sm font-medium">Sensitivity: {value}</span>
-        <span className="text-xs text-gray-500 font-semibold">Assertive</span>
-      </div>
-      <input
-        type="range"
-        min={0}
-        max={100}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full"
-      />
-      <div className="flex justify-between text-xs text-gray-400 mt-1">
-        <span>Show all</span>
-        <span>Show only high-confidence</span>
-      </div>
-      <p className="text-sm text-gray-600 mt-2">
-        Showing <strong>{filtered}</strong> of <strong>{total}</strong> total issues
-        {hidden > 0 && (
-          <span className="text-gray-400">
-            {' — '}Filtered out {hidden} low-confidence suggestions (noise reduction: {noisePct}%)
-          </span>
-        )}
-      </p>
-    </div>
-  );
-}
+import { useAuth } from '../context/AuthContext';
+import IssueCard from '../components/IssueCard';
+import SensitivitySlider from '../components/SensitivitySlider';
 
 export default function NewReview() {
+  const { supabase } = useAuth();
   const [diff, setDiff] = useState('');
   const [issues, setIssues] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [sensitivity, setSensitivity] = useState(50);
+  const [feedbackMap, setFeedbackMap] = useState({});
 
   const filteredIssues = useMemo(
     () => issues.filter((issue) => (issue.confidence ?? 0) >= sensitivity),
     [issues, sensitivity]
   );
+
+  const getToken = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token || '';
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -110,11 +29,16 @@ export default function NewReview() {
     setLoading(true);
     setError(null);
     setIssues([]);
+    setFeedbackMap({});
 
     try {
+      const token = await getToken();
       const res = await fetch('/api/review', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ diff }),
       });
 
@@ -130,6 +54,23 @@ export default function NewReview() {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFeedback = async (issueId, isHelpful) => {
+    setFeedbackMap((prev) => ({ ...prev, [issueId]: isHelpful }));
+    try {
+      const token = await getToken();
+      await fetch('/api/feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ issue_id: issueId, is_helpful: isHelpful }),
+      });
+    } catch {
+      // silent fail
     }
   };
 
@@ -177,7 +118,12 @@ export default function NewReview() {
           </h2>
           <div className="space-y-3">
             {filteredIssues.map((issue, i) => (
-              <IssueCard key={i} issue={issue} />
+              <IssueCard
+                key={issue.id || i}
+                issue={issue}
+                feedback={issue.id ? (feedbackMap[issue.id] ?? null) : null}
+                onFeedback={issue.id ? handleFeedback : null}
+              />
             ))}
           </div>
           {filteredIssues.length === 0 && (
