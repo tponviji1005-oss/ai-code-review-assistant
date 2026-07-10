@@ -7,6 +7,7 @@ import SensitivitySlider from '../components/SensitivitySlider';
 export default function ReviewView() {
   const { id } = useParams();
   const { supabase } = useAuth();
+  const [review, setReview] = useState(null);
   const [issues, setIssues] = useState([]);
   const [feedbackMap, setFeedbackMap] = useState({});
   const [loading, setLoading] = useState(true);
@@ -14,6 +15,14 @@ export default function ReviewView() {
 
   useEffect(() => {
     const fetchReview = async () => {
+      const { data: reviewData } = await supabase
+        .from('reviews')
+        .select('root_cause_summary')
+        .eq('id', id)
+        .single();
+
+      setReview(reviewData);
+
       const { data: issuesData, error } = await supabase
         .from('issues')
         .select('*')
@@ -81,6 +90,15 @@ export default function ReviewView() {
       <Link to="/dashboard" className="text-blue-600 hover:underline text-sm mb-4 inline-block">
         &larr; Back to Dashboard
       </Link>
+
+      {review?.root_cause_summary && (
+        <div className="bg-amber-50 border border-amber-200 px-4 py-3 rounded-lg mb-4">
+          <p className="text-sm font-semibold text-amber-800">
+            Root Cause Detected
+          </p>
+          <p className="text-sm text-amber-700 mt-1">{review.root_cause_summary}</p>
+        </div>
+      )}
 
       {issues.length > 0 && (
         <SensitivitySlider

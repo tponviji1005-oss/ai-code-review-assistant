@@ -11,6 +11,9 @@ export default function NewReview() {
   const [error, setError] = useState(null);
   const [sensitivity, setSensitivity] = useState(50);
   const [feedbackMap, setFeedbackMap] = useState({});
+  const [personalized, setPersonalized] = useState(false);
+  const [rootCause, setRootCause] = useState(null);
+  const [rootCauseIndexes, setRootCauseIndexes] = useState([]);
 
   const filteredIssues = useMemo(
     () => issues.filter((issue) => (issue.confidence ?? 0) >= sensitivity),
@@ -30,6 +33,9 @@ export default function NewReview() {
     setError(null);
     setIssues([]);
     setFeedbackMap({});
+    setPersonalized(false);
+    setRootCause(null);
+    setRootCauseIndexes([]);
 
     try {
       const token = await getToken();
@@ -50,6 +56,9 @@ export default function NewReview() {
 
       setIssues(data.issues || []);
       setSensitivity(50);
+      setPersonalized(data.personalized || false);
+      setRootCause(data.root_cause_summary || null);
+      setRootCauseIndexes(data.root_cause_related_indexes || []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -107,6 +116,26 @@ export default function NewReview() {
 
       {!loading && issues.length > 0 && (
         <div>
+          {personalized && (
+            <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-2 rounded-lg mb-4 text-sm">
+              Personalized based on your feedback history
+            </div>
+          )}
+
+          {rootCause && (
+            <div className="bg-amber-50 border border-amber-200 px-4 py-3 rounded-lg mb-4">
+              <p className="text-sm font-semibold text-amber-800">
+                Root Cause Detected
+              </p>
+              <p className="text-sm text-amber-700 mt-1">{rootCause}</p>
+              {rootCauseIndexes.length > 0 && (
+                <p className="text-xs text-amber-600 mt-2">
+                  Related issues: {rootCauseIndexes.map((i) => i + 1).join(', ')}
+                </p>
+              )}
+            </div>
+          )}
+
           <SensitivitySlider
             value={sensitivity}
             onChange={setSensitivity}

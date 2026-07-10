@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-function buildPrompt(parsedFiles, rawDiff) {
+function buildPrompt(parsedFiles, rawDiff, personalizationContext) {
   const filesSummary = parsedFiles
     .map((f) => {
       let out = `File: ${f.name}\n`;
@@ -14,6 +14,11 @@ function buildPrompt(parsedFiles, rawDiff) {
     })
     .join('\n---\n');
 
+  let personalizationBlock = '';
+  if (personalizationContext) {
+    personalizationBlock = `\n## User Preferences\n${personalizationContext}\n`;
+  }
+
   return `You are an expert senior software engineer conducting a code review. Analyze the following code diff for bugs, security vulnerabilities, performance issues, and style problems.
 
 ## Raw Diff
@@ -23,10 +28,12 @@ ${rawDiff}
 
 ## Parsed Changes
 ${filesSummary || '(no structured changes found)'}
-
+${personalizationBlock}
 For each issue found, provide the file name, exact line number, a category (bug|security|performance|style), severity (critical|high|medium|low), a confidence score (0-100), a clear description, and a specific fix suggestion.
 
 Assign LOWER confidence (below 50) to minor style preferences or subjective suggestions, and HIGHER confidence (above 80) to clear bugs, security vulnerabilities, or definite logic errors.
+
+${personalizationContext ? 'Weight your findings according to the user preferences above: provide more detail and higher confidence on categories the user values, and be more conservative with lower confidence on categories the user tends to dismiss.' : ''}
 
 Return ONLY valid JSON in this exact shape — no markdown, no code fences, no explanation outside the JSON:
 {
@@ -54,7 +61,7 @@ function cleanJsonResponse(text) {
   return cleaned;
 }
 
-export async function reviewWithGemini(parsedFiles, rawDiff) {
+async function callGemini(prompt) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error('Gemini API key is not configured');
@@ -63,7 +70,6 @@ export async function reviewWithGemini(parsedFiles, rawDiff) {
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-  const prompt = buildPrompt(parsedFiles, rawDiff);
   const maxRetries = 3;
   let lastError;
 
@@ -72,15 +78,7 @@ export async function reviewWithGemini(parsedFiles, rawDiff) {
       const result = await model.generateContent(prompt);
       const response = result.response;
       const text = response.text();
-
-      const cleaned = cleanJsonResponse(text);
-      const parsed = JSON.parse(cleaned);
-
-      if (!parsed.issues || !Array.isArray(parsed.issues)) {
-        throw new Error('Response missing issues array');
-      }
-
-      return parsed;
+      return cleanJsonResponse(text);
     } catch (err) {
       lastError = err;
 
@@ -103,5 +101,47 @@ export async function reviewWithGemini(parsedFiles, rawDiff) {
   }
 
   const message = lastError?.message || 'Unknown error';
-  throw new Error(`Review failed: ${message}`);
+  throw new Error(`Gemini call failed: ${message}`);
+}
+
+export async function reviewWithGemini(parsedFiles, rawDiff, personalizationContext) {
+  const prompt = buildPrompt(parsedFiles, rawDiff, personalizationContext);
+  const cleaned = await callGemini(prompt);
+  const parsed = JSON.parse(cleaned);
+
+  if (!parsed.issues || !Array.isArray(parsed.issues)) {
+    throw new Error('Response missing issues array');
+  }
+
+  return parsed;
+}
+
+export async function detectRootCause(issues) {
+  const issueList = issues.map((issue, idx) =>
+    `[${idx}] File: ${issue.file}, Line: ${issue.line}, Category: ${issue.category}, Description: ${issue.description}`
+  ).join('\n');
+
+  const prompt = `You are an expert software engineer. Given the following list of code review issues, determine if multiple issues share a common underlying root cause.
+
+## Issues
+${issueList}
+
+If multiple issues share a common root cause, return a short summary of that root cause and the indexes of the related issues.
+
+Return ONLY valid JSON in this exact shape — no markdown, no code fences, no explanation outside the JSON:
+{
+  "rootCause": "short description of the shared root cause, or null if no clear shared cause exists",
+  "relatedIssueIndexes": [0, 2, 5]
+}
+
+If no clear shared cause exists, return { "rootCause": null, "relatedIssueIndexes": [] }.`;
+
+  try {
+    const cleaned = await callGemini(prompt);
+    const parsed = JSON.parse(cleaned);
+    return parsed;
+  } catch (err) {
+    console.error('Root cause detection failed:', err.message);
+    return { rootCause: null, relatedIssueIndexes: [] };
+  }
 }
