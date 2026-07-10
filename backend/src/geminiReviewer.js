@@ -33,6 +33,11 @@ For each issue found, provide the file name, exact line number, a category (bug|
 
 Assign LOWER confidence (below 50) to minor style preferences or subjective suggestions, and HIGHER confidence (above 80) to clear bugs, security vulnerabilities, or definite logic errors.
 
+For each issue, also provide a businessImpact object with:
+- riskLevel: "critical" | "high" | "medium" | "low" (based on real-world business impact — data loss, downtime, revenue, security exposure)
+- estimatedFixTime: a human-readable estimate like "5 minutes", "30 minutes", "2 hours", "1 day"
+- priorityRank: an integer (1 = most urgent to fix first). Assign ranks across ALL issues based on a combination of severity, confidence, and riskLevel. Critical/high confidence issues get lower numbers.
+
 ${personalizationContext ? 'Weight your findings according to the user preferences above: provide more detail and higher confidence on categories the user values, and be more conservative with lower confidence on categories the user tends to dismiss.' : ''}
 
 Return ONLY valid JSON in this exact shape — no markdown, no code fences, no explanation outside the JSON:
@@ -45,7 +50,12 @@ Return ONLY valid JSON in this exact shape — no markdown, no code fences, no e
       "severity": "critical|high|medium|low",
       "confidence": 85,
       "description": "what is wrong",
-      "suggestion": "how to fix it"
+      "suggestion": "how to fix it",
+      "businessImpact": {
+        "riskLevel": "critical|high|medium|low",
+        "estimatedFixTime": "e.g. 15 minutes",
+        "priorityRank": 1
+      }
     }
   ]
 }
@@ -101,6 +111,12 @@ async function callGemini(prompt) {
   }
 
   const message = lastError?.message || 'Unknown error';
+  if (message.includes('429') || message.includes('RATE_LIMIT') || message.includes('Too Many Requests') || message.includes('Resource has been exhausted')) {
+    throw new Error('Gemini API rate limit exceeded. Please wait a moment and try again.');
+  }
+  if (message.includes('API key') || message.includes('invalid') || message.includes('PERMISSION_DENIED')) {
+    throw new Error('Gemini API key is invalid or not configured.');
+  }
   throw new Error(`Gemini call failed: ${message}`);
 }
 

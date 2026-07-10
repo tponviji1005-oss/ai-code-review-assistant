@@ -1,8 +1,127 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { jsPDF } from 'jspdf';
 import IssueCard from '../components/IssueCard';
 import SensitivitySlider from '../components/SensitivitySlider';
+import LoadingSpinner from '../components/LoadingSpinner';
+
+const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
+
+function sortIssues(issues, sortBy) {
+  const sorted = [...issues];
+  if (sortBy === 'priority') {
+    sorted.sort((a, b) => (a.business_impact_priority_rank ?? 999) - (b.business_impact_priority_rank ?? 999));
+  } else if (sortBy === 'severity') {
+    sorted.sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 4) - (SEVERITY_ORDER[b.severity] ?? 4));
+  } else if (sortBy === 'confidence') {
+    sorted.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+  }
+  return sorted;
+}
+
+function buildPriorityMap(issues) {
+  const map = {};
+  issues.forEach((issue) => {
+    if (issue.business_impact_priority_rank != null) {
+      map[issue.id] = issue.business_impact_priority_rank;
+    }
+  });
+  return map;
+}
+
+function exportPdf(review, issues, filteredIssues) {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  let y = 20;
+
+  doc.setFontSize(18);
+  doc.text('Code Review Report', pageWidth / 2, y, { align: 'center' });
+  y += 10;
+
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.text(`Date: ${new Date(review.created_at || Date.now()).toLocaleDateString()}`, 20, y);
+  y += 6;
+  doc.text(`Total Issues: ${issues.length} | Showing: ${filteredIssues.length}`, 20, y);
+  y += 12;
+
+  doc.setTextColor(0);
+
+  filteredIssues.forEach((issue, idx) => {
+    if (y > 260) {
+      doc.addPage();
+      y = 20;
+    }
+
+    const priority = issue.business_impact_priority_rank != null ? `#${issue.business_impact_priority_rank}` : '';
+
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'bold');
+    doc.text(`${idx + 1}. ${priority} ${issue.file}:${issue.line}`, 20, y);
+    y += 6;
+
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(9);
+    doc.text(`Category: ${issue.category} | Severity: ${issue.severity} | Confidence: ${issue.confidence}%`, 20, y);
+    y += 5;
+
+    if (issue.business_impact_risk_level || issue.business_impact_fix_time) {
+      doc.text(`Risk: ${issue.business_impact_risk_level || 'N/A'} | Fix Time: ~${issue.business_impact_fix_time || 'N/A'}`, 20, y);
+      y += 5;
+    }
+
+    const descLines = doc.splitTextToSize(`Description: ${issue.description}`, pageWidth - 40);
+    doc.text(descLines, 20, y);
+    y += descLines.length * 4 + 2;
+
+    if (issue.suggestion) {
+      const sugLines = doc.splitTextToSize(`Suggestion: ${issue.suggestion}`, pageWidth - 40);
+      doc.text(sugLines, 20, y);
+      y += sugLines.length * 4 + 2;
+    }
+
+    y += 4;
+  });
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+  doc.save(`code-review-${dateStr}.pdf`);
+}
+
+function exportMarkdown(review, issues, filteredIssues) {
+  let md = '# Code Review Report\n\n';
+  md += `**Date:** ${new Date(review.created_at || Date.now()).toLocaleDateString()}\n`;
+  md += `**Total Issues:** ${issues.length} | **Showing:** ${filteredIssues.length}\n\n`;
+  md += '---\n\n';
+
+  filteredIssues.forEach((issue, idx) => {
+    const priority = issue.business_impact_priority_rank != null ? `#${issue.business_impact_priority_rank}` : '';
+    md += `## ${idx + 1}. ${priority} \`${issue.file}:${issue.line}\`\n\n`;
+    md += `| Field | Value |\n|---|---|\n`;
+    md += `| Category | ${issue.category} |\n`;
+    md += `| Severity | ${issue.severity} |\n`;
+    md += `| Confidence | ${issue.confidence}% |\n`;
+    if (issue.business_impact_risk_level) {
+      md += `| Risk Level | ${issue.business_impact_risk_level} |\n`;
+    }
+    if (issue.business_impact_fix_time) {
+      md += `| Est. Fix Time | ~${issue.business_impact_fix_time} |\n`;
+    }
+    md += `\n**Description:** ${issue.description}\n\n`;
+    if (issue.suggestion) {
+      md += `**Suggestion:**\n\`\`\`\n${issue.suggestion}\n\`\`\`\n\n`;
+    }
+    md += '---\n\n';
+  });
+
+  const blob = new Blob([md], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `code-review-${new Date().toISOString().slice(0, 10)}.md`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function ReviewView() {
   const { id } = useParams();
@@ -12,6 +131,7 @@ export default function ReviewView() {
   const [feedbackMap, setFeedbackMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [sensitivity, setSensitivity] = useState(50);
+  const [sortBy, setSortBy] = useState('priority');
 
   useEffect(() => {
     const fetchReview = async () => {
@@ -54,10 +174,12 @@ export default function ReviewView() {
     fetchReview();
   }, [id, supabase]);
 
-  const filteredIssues = useMemo(
-    () => issues.filter((issue) => (issue.confidence ?? 0) >= sensitivity),
-    [issues, sensitivity]
-  );
+  const filteredIssues = useMemo(() => {
+    const filtered = issues.filter((issue) => (issue.confidence ?? 0) >= sensitivity);
+    return sortIssues(filtered, sortBy);
+  }, [issues, sensitivity, sortBy]);
+
+  const priorityMap = useMemo(() => buildPriorityMap(issues), [issues]);
 
   const handleFeedback = async (issueId, isHelpful) => {
     setFeedbackMap((prev) => ({ ...prev, [issueId]: isHelpful }));
@@ -80,7 +202,7 @@ export default function ReviewView() {
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto p-6">
-        <p className="text-gray-500">Loading review...</p>
+        <LoadingSpinner message="Loading review..." />
       </div>
     );
   }
@@ -99,6 +221,40 @@ export default function ReviewView() {
           <p className="text-sm text-amber-700 mt-1">{review.root_cause_summary}</p>
         </div>
       )}
+
+      {/* Export + Sort Controls */}
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        {issues.length > 0 && (
+          <>
+            <button
+              onClick={() => exportPdf(review, issues, filteredIssues)}
+              className="bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-1.5 rounded"
+            >
+              Export as PDF
+            </button>
+            <button
+              onClick={() => exportMarkdown(review, issues, filteredIssues)}
+              className="bg-gray-700 hover:bg-gray-800 text-white text-sm px-4 py-1.5 rounded"
+            >
+              Export as Markdown
+            </button>
+          </>
+        )}
+        {issues.length > 0 && (
+          <div className="ml-auto flex items-center gap-2">
+            <label className="text-sm text-gray-500">Sort by:</label>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="border rounded px-2 py-1 text-sm"
+            >
+              <option value="priority">Priority</option>
+              <option value="severity">Severity</option>
+              <option value="confidence">Confidence</option>
+            </select>
+          </div>
+        )}
+      </div>
 
       {issues.length > 0 && (
         <SensitivitySlider
@@ -128,6 +284,7 @@ export default function ReviewView() {
             issue={issue}
             feedback={feedbackMap[issue.id] ?? null}
             onFeedback={handleFeedback}
+            priorityNumber={issue.business_impact_priority_rank ?? null}
           />
         ))}
       </div>

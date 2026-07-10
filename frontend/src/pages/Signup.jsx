@@ -2,6 +2,27 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
+function friendlyAuthError(msg) {
+  if (!msg) return 'Something went wrong. Please try again.';
+  const lower = msg.toLowerCase();
+  if (lower.includes('user already registered') || lower.includes('already been registered')) {
+    return 'An account with this email already exists. Please sign in instead.';
+  }
+  if (lower.includes('password')) {
+    return 'Password must be at least 6 characters long.';
+  }
+  if (lower.includes('valid email')) {
+    return 'Please enter a valid email address.';
+  }
+  if (lower.includes('rate') || lower.includes('429') || lower.includes('too many')) {
+    return 'Too many attempts. Please wait a moment and try again.';
+  }
+  if (lower.includes('network') || lower.includes('fetch')) {
+    return 'Network error. Please check your connection and try again.';
+  }
+  return msg;
+}
+
 export default function Signup() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,7 +40,7 @@ export default function Signup() {
 
     const { error: authError } = await signUp(email, password);
     if (authError) {
-      setError(authError.message);
+      setError(friendlyAuthError(authError.message));
     } else {
       setMessage('Account created successfully! You can now sign in.');
       setTimeout(() => navigate('/login'), 2000);

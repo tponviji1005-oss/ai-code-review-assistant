@@ -12,6 +12,13 @@ const SEVERITY_COLORS = {
   low: 'bg-gray-100 text-gray-600',
 };
 
+const RISK_COLORS = {
+  critical: 'bg-red-600 text-white',
+  high: 'bg-orange-500 text-white',
+  medium: 'bg-yellow-500 text-white',
+  low: 'bg-gray-400 text-white',
+};
+
 function ConfidenceDot({ confidence }) {
   const color =
     confidence >= 80 ? 'bg-green-500'
@@ -26,13 +33,19 @@ function ConfidenceDot({ confidence }) {
   );
 }
 
-export default function IssueCard({ issue, feedback, onFeedback }) {
+export default function IssueCard({ issue, feedback, onFeedback, priorityNumber }) {
   const catColor = CATEGORY_COLORS[issue.category] || 'bg-gray-100 text-gray-800';
   const sevColor = SEVERITY_COLORS[issue.severity] || 'bg-gray-100 text-gray-600';
+  const riskColor = RISK_COLORS[issue.business_impact_risk_level] || 'bg-gray-400 text-white';
 
   return (
     <div className="border rounded-lg p-4 bg-white shadow-sm">
       <div className="flex items-center gap-2 mb-2 flex-wrap">
+        {priorityNumber != null && (
+          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold">
+            {priorityNumber}
+          </span>
+        )}
         <span className="font-mono text-sm text-gray-500">
           {issue.file}:{issue.line}
         </span>
@@ -43,6 +56,16 @@ export default function IssueCard({ issue, feedback, onFeedback }) {
           {issue.severity}
         </span>
         <ConfidenceDot confidence={issue.confidence} />
+        {issue.business_impact_risk_level && (
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded ${riskColor}`}>
+            risk: {issue.business_impact_risk_level}
+          </span>
+        )}
+        {issue.business_impact_fix_time && (
+          <span className="text-xs text-gray-500">
+            Fix time: ~{issue.business_impact_fix_time}
+          </span>
+        )}
         {issue.id && onFeedback && (
           <span className="ml-auto inline-flex items-center gap-1">
             <button

@@ -2,6 +2,27 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
+function friendlyAuthError(msg) {
+  if (!msg) return 'Something went wrong. Please try again.';
+  const lower = msg.toLowerCase();
+  if (lower.includes('invalid login credentials') || lower.includes('invalid') && lower.includes('credential')) {
+    return 'Invalid email or password. Please check your credentials and try again.';
+  }
+  if (lower.includes('user not found')) {
+    return 'No account found with this email. Please sign up first.';
+  }
+  if (lower.includes('password')) {
+    return 'Password must be at least 6 characters long.';
+  }
+  if (lower.includes('rate') || lower.includes('429') || lower.includes('too many')) {
+    return 'Too many attempts. Please wait a moment and try again.';
+  }
+  if (lower.includes('network') || lower.includes('fetch')) {
+    return 'Network error. Please check your connection and try again.';
+  }
+  return msg;
+}
+
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,7 +38,7 @@ export default function Login() {
 
     const { error: authError } = await signIn(email, password);
     if (authError) {
-      setError(authError.message);
+      setError(friendlyAuthError(authError.message));
     } else {
       navigate('/');
     }

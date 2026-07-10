@@ -2,6 +2,39 @@ import { useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import IssueCard from '../components/IssueCard';
 import SensitivitySlider from '../components/SensitivitySlider';
+import LoadingSpinner from '../components/LoadingSpinner';
+
+const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
+
+function sortIssues(issues, sortBy) {
+  const sorted = [...issues];
+  if (sortBy === 'priority') {
+    sorted.sort((a, b) => (a.business_impact_priority_rank ?? 999) - (b.business_impact_priority_rank ?? 999));
+  } else if (sortBy === 'severity') {
+    sorted.sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 4) - (SEVERITY_ORDER[b.severity] ?? 4));
+  } else if (sortBy === 'confidence') {
+    sorted.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+  }
+  return sorted;
+}
+
+function friendlyError(msg) {
+  if (!msg) return 'Something went wrong. Please try again.';
+  const lower = msg.toLowerCase();
+  if (lower.includes('429') || lower.includes('rate') || lower.includes('too many requests') || lower.includes('resource has been exhausted')) {
+    return 'The AI service is rate-limited right now. Please wait a moment and try again.';
+  }
+  if (lower.includes('api key') || lower.includes('not configured')) {
+    return 'AI service is not configured. Please contact your administrator.';
+  }
+  if (lower.includes('network') || lower.includes('fetch')) {
+    return 'Network error. Please check your connection and try again.';
+  }
+  if (lower.includes('no diff')) {
+    return 'Please paste a code diff before submitting.';
+  }
+  return msg;
+}
 
 export default function NewReview() {
   const { supabase } = useAuth();
@@ -10,15 +43,16 @@ export default function NewReview() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [sensitivity, setSensitivity] = useState(50);
+  const [sortBy, setSortBy] = useState('priority');
   const [feedbackMap, setFeedbackMap] = useState({});
   const [personalized, setPersonalized] = useState(false);
   const [rootCause, setRootCause] = useState(null);
   const [rootCauseIndexes, setRootCauseIndexes] = useState([]);
 
-  const filteredIssues = useMemo(
-    () => issues.filter((issue) => (issue.confidence ?? 0) >= sensitivity),
-    [issues, sensitivity]
-  );
+  const filteredIssues = useMemo(() => {
+    const filtered = issues.filter((issue) => (issue.confidence ?? 0) >= sensitivity);
+    return sortIssues(filtered, sortBy);
+  }, [issues, sensitivity, sortBy]);
 
   const getToken = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -56,11 +90,12 @@ export default function NewReview() {
 
       setIssues(data.issues || []);
       setSensitivity(50);
+      setSortBy('priority');
       setPersonalized(data.personalized || false);
       setRootCause(data.root_cause_summary || null);
       setRootCauseIndexes(data.root_cause_related_indexes || []);
     } catch (err) {
-      setError(err.message);
+      setError(friendlyError(err.message));
     } finally {
       setLoading(false);
     }
@@ -105,11 +140,11 @@ export default function NewReview() {
       </form>
 
       {loading && (
-        <p className="text-gray-500 text-center py-8">Analyzing code with AI...</p>
+        <LoadingSpinner message="Analyzing code with AI..." />
       )}
 
       {error && (
-        <div className="bg-red-100 text-red-700 p-4 rounded-lg mb-4">
+        <div className="bg-red-100 text-red-700 p-4 rounded-lg mb-4 text-sm">
           {error}
         </div>
       )}
@@ -136,6 +171,21 @@ export default function NewReview() {
             </div>
           )}
 
+          <div className="flex flex-wrap items-center gap-3 mb-2">
+            <div className="ml-auto flex items-center gap-2">
+              <label className="text-sm text-gray-500">Sort by:</label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="border rounded px-2 py-1 text-sm"
+              >
+                <option value="priority">Priority</option>
+                <option value="severity">Severity</option>
+                <option value="confidence">Confidence</option>
+              </select>
+            </div>
+          </div>
+
           <SensitivitySlider
             value={sensitivity}
             onChange={setSensitivity}
@@ -152,6 +202,7 @@ export default function NewReview() {
                 issue={issue}
                 feedback={issue.id ? (feedbackMap[issue.id] ?? null) : null}
                 onFeedback={issue.id ? handleFeedback : null}
+                priorityNumber={issue.business_impact_priority_rank ?? null}
               />
             ))}
           </div>

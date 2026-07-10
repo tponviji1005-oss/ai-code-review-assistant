@@ -99,6 +99,9 @@ router.post('/review', authenticate, async (req, res) => {
       confidence: issue.confidence ?? 50,
       description: issue.description || '',
       suggestion: issue.suggestion || '',
+      business_impact_risk_level: issue.businessImpact?.riskLevel || null,
+      business_impact_fix_time: issue.businessImpact?.estimatedFixTime || null,
+      business_impact_priority_rank: issue.businessImpact?.priorityRank || null,
     }));
 
     let savedIssues = result.issues || [];
@@ -107,7 +110,7 @@ router.post('/review', authenticate, async (req, res) => {
       const { data: insertedIssues, error: issuesErr } = await supabase
         .from('issues')
         .insert(issuesToInsert)
-        .select('id, file, line, category, severity, confidence, description, suggestion');
+        .select('id, file, line, category, severity, confidence, description, suggestion, business_impact_risk_level, business_impact_fix_time, business_impact_priority_rank');
 
       if (issuesErr) {
         console.error('Failed to save issues:', issuesErr.message);
@@ -141,7 +144,14 @@ router.post('/review', authenticate, async (req, res) => {
     });
   } catch (err) {
     console.error('Review error:', err.message);
-    res.status(500).json({ error: err.message || 'Internal server error' });
+    const msg = err.message || 'Internal server error';
+    if (msg.includes('429') || msg.includes('RATE_LIMIT') || msg.includes('Too Many Requests') || msg.includes('Resource has been exhausted')) {
+      return res.status(429).json({ error: 'The AI service is rate-limited right now. Please wait a moment and try again.' });
+    }
+    if (msg.includes('API key') || msg.includes('not configured')) {
+      return res.status(500).json({ error: 'AI service is not configured. Please contact your administrator.' });
+    }
+    res.status(500).json({ error: msg });
   }
 });
 

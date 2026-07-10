@@ -7,6 +7,7 @@ import {
   LineChart, Line,
   ResponsiveContainer,
 } from 'recharts';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 const CATEGORY_COLORS = {
   bug: '#ef4444',
@@ -143,10 +144,7 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto p-6">
-        <div className="flex items-center justify-center py-20">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-3 text-gray-500">Loading dashboard...</span>
-        </div>
+        <LoadingSpinner message="Loading dashboard..." />
       </div>
     );
   }

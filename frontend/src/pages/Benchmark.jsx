@@ -4,6 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer,
 } from 'recharts';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 const TOOL_COLORS = {
   myTool: '#3b82f6',
@@ -180,10 +181,7 @@ export default function Benchmark() {
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto p-6">
-        <div className="flex items-center justify-center py-20">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-3 text-gray-500">Loading benchmarks...</span>
-        </div>
+        <LoadingSpinner message="Loading benchmarks..." />
       </div>
     );
   }
