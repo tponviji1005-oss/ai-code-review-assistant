@@ -27,6 +27,14 @@ export default function Navbar() {
             >
               Dashboard
             </Link>
+            <Link
+              to="/benchmark"
+              className={`text-sm hover:text-gray-300 ${
+                location.pathname === '/benchmark' ? 'text-blue-400' : 'text-gray-300'
+              }`}
+            >
+              Benchmark
+            </Link>
           </div>
         )}
       </div>

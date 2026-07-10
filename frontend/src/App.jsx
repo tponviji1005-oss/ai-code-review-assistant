@@ -7,6 +7,7 @@ import Signup from './pages/Signup';
 import NewReview from './pages/NewReview';
 import Dashboard from './pages/Dashboard';
 import ReviewView from './pages/ReviewView';
+import Benchmark from './pages/Benchmark';
 
 function AuthenticatedLayout() {
   return (
@@ -17,6 +18,7 @@ function AuthenticatedLayout() {
           <Route path="/" element={<NewReview />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/review/:id" element={<ReviewView />} />
+          <Route path="/benchmark" element={<Benchmark />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
