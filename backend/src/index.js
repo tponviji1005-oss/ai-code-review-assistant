@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { supabase } from './supabase.js';
 import reviewRouter from './routes/review.js';
 import benchmarkRouter from './routes/benchmark.js';
 
