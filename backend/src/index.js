@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import reviewRouter from './routes/review.js';
+import reviewPrRouter from './routes/review-pr.js';
 import benchmarkRouter from './routes/benchmark.js';
 
 dotenv.config();
@@ -14,6 +15,7 @@ app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json({ limit: '5mb' }));
 
 app.use('/api', reviewRouter);
+app.use('/api/review', reviewPrRouter);
 app.use('/api', benchmarkRouter);
 
 app.listen(PORT, () => {
