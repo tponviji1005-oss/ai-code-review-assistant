@@ -14,11 +14,11 @@ router.post("/review-pr", async (req, res) => {
       });
     }
 
-    const reviews = await reviewPullRequest(owner, repo, pullNumber);
+    const result = await reviewPullRequest(owner, repo, pullNumber);
 
     return res.status(200).json({
       success: true,
-      reviews,
+      ...result,
     });
   } catch (err) {
     console.error("PR review error:", err.message);
