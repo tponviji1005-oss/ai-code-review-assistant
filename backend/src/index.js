@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import reviewRouter from './routes/review.js';
 import benchmarkRouter from './routes/benchmark.js';
+import webhookRouter from './routes/webhook.js';
 
 dotenv.config();
 
@@ -15,6 +16,7 @@ app.use(express.json({ limit: '5mb' }));
 
 app.use('/api', reviewRouter);
 app.use('/api', benchmarkRouter);
+app.use('/webhook', webhookRouter);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
