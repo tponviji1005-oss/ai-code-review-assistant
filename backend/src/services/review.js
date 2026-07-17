@@ -49,16 +49,26 @@ function buildReviewReport(reviews) {
 }
 
 export async function reviewPullRequest(owner, repo, pullNumber) {
+  console.log(`[review] Starting review for ${owner}/${repo}#${pullNumber}`);
+
   const files = await getPullRequestFiles(owner, repo, pullNumber);
+  console.log(`[review] Fetched ${files.length} changed files from GitHub`);
 
   const reviewable = files.filter(
     (f) => f.status !== 'removed' && f.status !== 'deleted' && f.patch
   );
+  console.log(`[review] ${reviewable.length} reviewable files (after filtering)`);
+
+  if (reviewable.length === 0) {
+    console.warn('[review] No reviewable files found — skipping comment');
+    return { success: true, reviews: [], commentPosted: false };
+  }
 
   const reviews = [];
 
   for (const file of reviewable) {
     try {
+      console.log(`[review] Reviewing ${file.filename}...`);
       const parsedFiles = parseDiffText(file.patch);
       const result = await reviewWithGemini(parsedFiles, file.patch, null);
 
@@ -66,8 +76,9 @@ export async function reviewPullRequest(owner, repo, pullNumber) {
         filename: file.filename,
         issues: result.issues || [],
       });
+      console.log(`[review] ${file.filename}: ${result.issues?.length || 0} issues found`);
     } catch (err) {
-      console.error(`Failed to review ${file.filename}: ${err.message}`);
+      console.error(`[review] FAILED to review ${file.filename}: ${err.message}`);
       reviews.push({
         filename: file.filename,
         issues: [],
@@ -76,15 +87,11 @@ export async function reviewPullRequest(owner, repo, pullNumber) {
     }
   }
 
-  let commentPosted = false;
+  const report = buildReviewReport(reviews);
+  console.log(`[review] Report built: ${report.length} chars, ${reviews.length} files`);
 
-  try {
-    const report = buildReviewReport(reviews);
-    await postReviewComment(owner, repo, pullNumber, report);
-    commentPosted = true;
-  } catch (err) {
-    console.error(`Failed to post review comment: ${err.message}`);
-  }
+  await postReviewComment(owner, repo, pullNumber, report);
+  console.log(`[review] Comment posted successfully on ${owner}/${repo}#${pullNumber}`);
 
-  return { success: true, reviews, commentPosted };
+  return { success: true, reviews, commentPosted: true };
 }

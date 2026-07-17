@@ -24,10 +24,12 @@ router.post('/github', async (req, res) => {
   }
 
   try {
-    await reviewPullRequest(owner, repo, prNumber);
-    res.json({ success: true, message: 'Webhook received successfully' });
+    const result = await reviewPullRequest(owner, repo, prNumber);
+    console.log(`[webhook] Review complete: commentPosted=${result.commentPosted}, reviews=${result.reviews.length}`);
+    res.json({ success: true, message: 'Webhook received successfully', commentPosted: result.commentPosted });
   } catch (err) {
-    console.error('Webhook review error:', err.message);
+    console.error('[webhook] Review error:', err.message);
+    console.error('[webhook] Full error:', err);
     res.status(500).json({ success: false, error: err.message || 'Internal server error' });
   }
 });
