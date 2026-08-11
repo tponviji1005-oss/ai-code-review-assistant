@@ -47,6 +47,18 @@ AI code review tools like CodeRabbit and GitHub Copilot generate large volumes o
 - Friendly error messages throughout
 - Consistent loading states and empty states
 
+## AI Code Review
+
+This project includes an AI-powered code review workflow that:
+
+- Fetches open pull requests from GitHub.
+- Reads the files changed in each pull request.
+- Sends the code changes to an AI model for analysis.
+- Generates review comments with suggestions for code quality, readability, and best practices.
+- Can be extended to automatically post review comments back to GitHub pull requests.
+
+> This feature is currently under development.
+
 ## Tech Stack
 
 | Layer | Technology |

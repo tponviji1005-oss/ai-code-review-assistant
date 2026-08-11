@@ -20,6 +20,14 @@ export default function Navbar() {
               New Review
             </Link>
             <Link
+              to="/review-pr"
+              className={`text-sm hover:text-gray-300 ${
+                location.pathname === '/review-pr' ? 'text-blue-400' : 'text-gray-300'
+              }`}
+            >
+              Review PR
+            </Link>
+            <Link
               to="/dashboard"
               className={`text-sm hover:text-gray-300 ${
                 location.pathname === '/dashboard' ? 'text-blue-400' : 'text-gray-300'
