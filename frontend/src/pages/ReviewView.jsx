@@ -2,10 +2,33 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { jsPDF } from 'jspdf';
-import { sortIssues } from '../utils/sortIssues';
 import IssueCard from '../components/IssueCard';
 import SensitivitySlider from '../components/SensitivitySlider';
 import LoadingSpinner from '../components/LoadingSpinner';
+
+const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
+
+function sortIssues(issues, sortBy) {
+  const sorted = [...issues];
+  if (sortBy === 'priority') {
+    sorted.sort((a, b) => (a.business_impact_priority_rank ?? 999) - (b.business_impact_priority_rank ?? 999));
+  } else if (sortBy === 'severity') {
+    sorted.sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 4) - (SEVERITY_ORDER[b.severity] ?? 4));
+  } else if (sortBy === 'confidence') {
+    sorted.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+  }
+  return sorted;
+}
+
+function buildPriorityMap(issues) {
+  const map = {};
+  issues.forEach((issue) => {
+    if (issue.business_impact_priority_rank != null) {
+      map[issue.id] = issue.business_impact_priority_rank;
+    }
+  });
+  return map;
+}
 
 function exportPdf(review, issues, filteredIssues) {
   const doc = new jsPDF();
@@ -155,6 +178,8 @@ export default function ReviewView() {
     const filtered = issues.filter((issue) => (issue.confidence ?? 0) >= sensitivity);
     return sortIssues(filtered, sortBy);
   }, [issues, sensitivity, sortBy]);
+
+  const priorityMap = useMemo(() => buildPriorityMap(issues), [issues]);
 
   const handleFeedback = async (issueId, isHelpful) => {
     setFeedbackMap((prev) => ({ ...prev, [issueId]: isHelpful }));
